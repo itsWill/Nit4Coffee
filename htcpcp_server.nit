@@ -5,42 +5,39 @@ class HTCPCPAction
   var brewing = false
 
   redef fun answer(http_request, turi) do
-    var title: String
     var message: String
     var method = http_request.method
     var headers = http_request.header
     var response
 
     if method == "POST" or method == "BREW" then
-      title = "BREWING"
-      message = "Brewing a new pot of coffee"
-      brewing = true
-      response = new HttpResponse(200)
+      if brewing then
+        message = "Pot Busy"
+        response = new HttpResponse(400)
+      else
+        message = "Brewing a new pot of coffee\n"
+        brewing = true
+        response = new HttpResponse(200)
+      end
     else if method == "WHEN" and brewing then
-      title = "STOP ADDING MILK"
-      message = "Stopped adding milk, your coffee is ready!"
+      message = "Stopped adding milk, your coffee is ready!\n"
       brewing = false
+      response = new HttpResponse(200)
+    else if method == "PROPFIND" then
+      if brewing then
+        message = "The pot is busy\n"
+      else
+        message = "The pot is ready to brew more coffee\n"
+      end
       response = new HttpResponse(200)
     else
-      title = "ERROR"
-      message = "Error Brewing Coffe"
+      message = "Uknown method: {method}"
       brewing = false
-      response = new HttpResponse(500)
+      response = new HttpResponse(405)
     end
 
-    response.body = """
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>{{{title}}}</title>
-      </head>
-      <body>
-        <h1>{{{title}}}</h1>
-        <p>{{{message}}}<p>
-      </body>
-      </html>
-    """
+    response.header["Content-Type"] = "text"
+    response.body = message
 
     return response
   end
@@ -49,10 +46,9 @@ end
 
 class HTCPCServer
   var port: Int
-  var host: String
 
   fun run do
-    var vh = new VirtualHost("{host}:{port}")
+    var vh = new VirtualHost("localhost:{port}")
     vh.routes.add new Route("/", new HTCPCPAction)
     var factory = new HttpFactory.and_libevent
     factory.config.virtual_hosts.add vh
@@ -61,6 +57,6 @@ class HTCPCServer
   end
 end
 
-var server = new HTCPCServer(8080,"localhost")
+var server = new HTCPCServer(8080)
 
 server.run
